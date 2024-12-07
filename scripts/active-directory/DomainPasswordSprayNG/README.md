@@ -67,6 +67,7 @@ Invoke-DomainPasswordSprayNG -Password "Winter2023!" -Filter "(description=*admi
 | LogFilePath | Path for log file |
 | UsernameAsPassword | Test username as password |
 | ContinueOnSuccess | Continue testing after finding valid credentials |
+| ContinueOnSuccess | Stop testing after finding valid credentials |
 
 ## Safety Features
 
